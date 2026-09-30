@@ -1,0 +1,28 @@
+<resources>
+
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="actionBarStyle">@style/MyActionBar</item>
+    </style>
+
+    <style name="MyActionBar" parent="@style/Widget.AppCompat.ActionBar">
+        <item name="android:height">28dp</item>
+        <item name="height">28dp</item>
+        <item name="android:background">@color/colorPrimary</item>
+        <item name="background">@color/colorPrimary</item>
+        <item name="titleTextStyle">@style/MyActionBarTitle</item>
+    </style>
+
+    <style name="MyActionBarTitle" parent="@style/TextAppearance.AppCompat.Widget.ActionBar.Title">
+        <item name="android:textSize">13sp</item>
+    </style>
+
+    <style name="MyPlayerButton" parent="ExoStyledControls.Button">
+        <item name="android:maxWidth">28dp</item>
+        <item name="android:maxHeight">28dp</item>
+        <item name="android:padding">2dp</item>
+    </style>
+
+</resources>

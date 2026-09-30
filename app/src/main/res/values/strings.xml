@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">MyPlayer</string>
+    <string name="label">URL:</string>
+    <string name="url_streaming">https://www.youtube.com/watch?v=oUYnZv_G82Q</string>
+    <string name="embed_btn">▶</string>
+    <string name="open_local_files">OPEN LOCAL FILES</string>
+    <string name="grant_storage_access_permission">GRANT STORAGE PERMISSION</string>
+    <string name="grant_manage_app_all_files_access_permission">GRANT MANAGE APP ALL FILES ACCESS PERMISSION</string>
+    <string name="grant_persisted_tree_uri_permission">GRANT PERSISTED TREE URI PERMISSION</string>
+</resources>
