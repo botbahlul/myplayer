@@ -7,6 +7,6 @@ Couple years ago I found that VLC is the one which suite my need, but sadly it c
 
 That's why I decide to make my own media player.
 
-Check my SPEECH RECOGNITIION + TRANSLATE PROJECTS https://github.com/botbahlul?tab=repositories
+Check my SPEECH RECOGNITIION + TRANSLATE PROJECTS : https://github.com/botbahlul?tab=repositories
 
 Buy me coffee : https://sociabuzz.com/botbahlul/tribe
