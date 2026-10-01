@@ -15,6 +15,7 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.Manifest;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -26,6 +27,7 @@ import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -68,6 +70,8 @@ import android.content.IntentFilter;
 
 import android.widget.FrameLayout;
 
+import android.view.inputmethod.InputMethodManager;
+import android.content.Context;
 
 @UnstableApi
 public class MainActivity extends AppCompatActivity {
@@ -108,6 +112,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
         setContentView(R.layout.activity_main);
         urlInput = findViewById(R.id.url_input);
         playerView = findViewById(R.id.player_view);
@@ -121,6 +126,10 @@ public class MainActivity extends AppCompatActivity {
         buttonGrantPersistedttreeUriPermission = findViewById(R.id.button_grant_persisted_tree_uri_permission);
         root = findViewById(R.id.root);
         rootLayout = findViewById(R.id.root_layout);
+        root.setFocusable(true);
+        root.setFocusableInTouchMode(true);
+        rootLayout.setFocusable(true);
+        rootLayout.setFocusableInTouchMode(true);
         root.requestFocus();
 
         urlInput.setOnFocusChangeListener((v, hasFocus) -> {
@@ -140,6 +149,18 @@ public class MainActivity extends AppCompatActivity {
             urlInput.clearFocus();
             rootLayout.requestFocus();
             Log.d(TAG, "rootLayout request focus");
+        });
+
+        root.setOnFocusChangeListener((v, hasFocus) -> {
+            Log.d(TAG, "root focus = " + hasFocus);
+        });
+
+        rootLayout.setOnFocusChangeListener((v, hasFocus) -> {
+            Log.d(TAG, "rootLayout focus = " + hasFocus);
+        });
+
+        textViewSelectedFilePath.setOnFocusChangeListener((v, hasFocus) -> {
+            Log.d(TAG, "textViewSelectedFilePath focus = " + hasFocus);
         });
 
         buttonEmbed.setOnClickListener(view -> {
@@ -308,6 +329,29 @@ public class MainActivity extends AppCompatActivity {
             throw new RuntimeException(e);
         }
 
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            View currentFocus = getCurrentFocus();
+
+            if (currentFocus == urlInput) {
+                Rect rect = new Rect();
+                urlInput.getGlobalVisibleRect(rect);
+
+                if (!rect.contains((int) event.getRawX(), (int) event.getRawY())) {
+                    urlInput.clearFocus();
+
+                    InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                    if (imm != null) {
+                        imm.hideSoftInputFromWindow(urlInput.getWindowToken(), 0);
+                    }
+                }
+            }
+        }
+
+        return super.dispatchTouchEvent(event);
     }
 
     @Override
