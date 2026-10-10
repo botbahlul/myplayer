@@ -1,4 +1,4 @@
-package com.app.myplayer; // Sesuaikan dengan package Anda
+package com.app.myplayer;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -6,6 +6,8 @@ import android.app.NotificationManager;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -15,18 +17,19 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.exoplayer.hls.HlsMediaSource;
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.session.MediaSession;
 import androidx.media3.session.MediaSessionService;
+
 import com.chaquo.python.PyObject;
 import com.chaquo.python.Python;
 import com.chaquo.python.android.AndroidPlatform;
 
+import java.io.File;
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-import java.io.File;
 
 public class PlaybackService extends MediaSessionService {
     private static final String TAG = "PlaybackService";
@@ -37,23 +40,22 @@ public class PlaybackService extends MediaSessionService {
     private ExoPlayer player;
     private MediaSession mediaSession;
     private ExecutorService executor;
-
     private ArrayList<String> selectedFilesPath;
     private ArrayList<Uri> selectedFilesUri;
 
     @Override
     public void onCreate() {
         super.onCreate();
+
         selectedFilesPath = new ArrayList<>();
         selectedFilesUri = new ArrayList<>();
         executor = Executors.newSingleThreadExecutor();
-        // Initialize Player & MediaSession
+
         player = new ExoPlayer.Builder(this).build();
         mediaSession = new MediaSession.Builder(this, player).build();
-        // Make Notification Channel
+
         createNotificationChannel();
 
-        // Running Foreground Service with initial notification
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setContentTitle("My Player")
                 .setContentText("Preparing player...")
@@ -69,90 +71,172 @@ public class PlaybackService extends MediaSessionService {
         if (intent != null && intent.hasExtra("EXTRA_STREAMING_URL")) {
             streamUrl = intent.getStringExtra("EXTRA_STREAMING_URL");
             Log.i(TAG, "Receiving URL from Intent: " + streamUrl);
-            //if (streamUrl.isEmpty()) {
-            //    streamUrl = STREAMING_URL.STRING;
-            //}
             getStreamUrlAndPlay();
         }
 
-        //if (intent != null && intent.hasExtra("EXTRA_SELECTED_FILES_PATH")) {
         if (intent != null && intent.hasExtra("EXTRA_SELECTED_FILES_URI")) {
-            //selectedFilesPath = intent.getStringArrayListExtra("EXTRA_SELECTED_FILES_PATH");
-            //if (selectedFilesPath == null) {
-            //    selectedFilesPath = new ArrayList<>();
-            //}
-            //Log.i(TAG, "Receiving selectedFilesPath from MainActivity");
-            //for (int i = 0; i < selectedFilesPath.size(); i++) {
-            //    Log.i(TAG, "selectedFilesPath [" + i + "] = " + selectedFilesPath.get(i));
-            //}
-            //if (!selectedFilesPath.isEmpty()) {
-            //    playLocalFile(selectedFilesPath.get(0));
-            //}
-
             selectedFilesUri = intent.getParcelableArrayListExtra("EXTRA_SELECTED_FILES_URI");
+
             if (selectedFilesUri == null) {
                 selectedFilesUri = new ArrayList<>();
             }
+
             Log.i(TAG, "Receiving selectedFilesUri from MainActivity");
 
             for (int i = 0; i < selectedFilesUri.size(); i++) {
                 Log.i(TAG, "selectedFilesUri[" + i + "] = " + selectedFilesUri.get(i));
             }
+
             if (!selectedFilesUri.isEmpty()) {
                 playLocalFiles(selectedFilesUri);
             }
-
         }
+
         return super.onStartCommand(intent, flags, startId);
     }
 
-    private void getStreamUrlAndPlay() {
-        if (streamUrl == null || streamUrl.isEmpty()) {
-            Log.e(TAG, "URL is empty, process cancelled.");
-            return;
+    private File getQuickJsRuntime() {
+        File nativeLibraryDirectory = new File(getApplicationInfo().nativeLibraryDir);
+        File qjsFile = new File(nativeLibraryDirectory, "libqjs.so");
+
+        Log.i(TAG, "Native library directory: " + nativeLibraryDirectory.getAbsolutePath());
+        Log.i(TAG, "QuickJS path: " + qjsFile.getAbsolutePath());
+        Log.i(TAG, "QuickJS exists: " + qjsFile.isFile());
+        Log.i(TAG, "QuickJS executable: " + qjsFile.canExecute());
+
+        if (!qjsFile.isFile()) {
+            throw new IllegalStateException(
+                    "QuickJS binary not found: " + qjsFile.getAbsolutePath()
+            );
         }
-        executor.execute(() -> {
-            try {
-                Log.i(TAG, "Starting Streamlink...");
-                if (!Python.isStarted()) {
-                    Python.start(new AndroidPlatform(this));
-                }
-                Python python = Python.getInstance();
-                PyObject module = python.getModule("streamlink_helper");
-                Log.i(TAG, "Checking Streamlink URL: " + streamUrl);
-                PyObject validResult = module.callAttr("is_streaming_url", streamUrl);
-                boolean valid = validResult.toBoolean();
-                if (!valid) {
-                    Log.e(TAG, "Streamlink: no stream found");
-                    sendStreamlinkError("URL is not a valid Streamlink streaming URL");
-                    return;
-                }
-                Log.i(TAG, "Streamlink URL is valid");
-                PyObject result = module.callAttr("get_stream_url", streamUrl);
-                String streamUrl = result.toString();
-                Log.i(TAG, "Stream URL: " + streamUrl);
-                //new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> playHls(streamUrl));
-                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> playStream(streamUrl));
-            } catch (Exception e) {
-                Log.e(TAG, "Streamlink failed", e);
-                sendStreamlinkError(e.getMessage() != null ? e.getMessage() : "Streamlink error");
-            }
-        });
+
+        if (!qjsFile.canExecute()) {
+            throw new IllegalStateException(
+                    "QuickJS binary is not executable: " + qjsFile.getAbsolutePath()
+            );
+        }
+
+        return qjsFile;
     }
 
-    @OptIn(markerClass = UnstableApi.class)
-    private void playHls(String streamUrl) {
-        DefaultHttpDataSource.Factory httpDataSourceFactory =
-                new DefaultHttpDataSource.Factory()
-                        .setUserAgent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Mobile Safari/537.36");
+    private void getStreamUrlAndPlay() {
+        if (streamUrl == null || streamUrl.trim().isEmpty()) {
+            Log.e(TAG, "URL is empty, process cancelled.");
+            sendStreamlinkError("URL is empty");
+            return;
+        }
 
-        HlsMediaSource hlsMediaSource =
-                new HlsMediaSource.Factory(httpDataSourceFactory)
-                        .createMediaSource(MediaItem.fromUri(Uri.parse(streamUrl)));
+        final String requestedUrl = streamUrl;
 
-        player.setMediaSource(hlsMediaSource);
-        player.prepare();
-        player.play();
+        if (executor == null || executor.isShutdown()) {
+            Log.e(TAG, "Executor is unavailable");
+            sendStreamlinkError("Playback service executor is unavailable");
+            return;
+        }
+
+        if (isYouTubeUrl(streamUrl)) {
+            // UNTUK YOUTUBE: yt-dlp + QuickJS
+            executor.execute(() -> {
+                try {
+                    File qjsFile = getQuickJsRuntime();
+
+                    if (!Python.isStarted()) {
+                        Python.start(new AndroidPlatform(getApplicationContext()));
+                    }
+
+                    Python python = Python.getInstance();
+                    PyObject module = python.getModule("stream_helper");
+
+                    module.callAttr("set_quickjs_path", qjsFile.getAbsolutePath());
+
+                    Log.i(TAG, "QuickJS path passed to Python: " + qjsFile.getAbsolutePath());
+                    Log.i(TAG, "Resolving stream URL: " + requestedUrl);
+
+
+                    PyObject result = module.callAttr("get_yt_url", requestedUrl);
+                    String resolvedStreamUrl = result.toString();
+
+                    if (resolvedStreamUrl.startsWith("COOKIE_AUTH_REQUIRED:")) {
+                        Log.w(TAG, "YouTube cookie authentication needs attention");
+
+                        Intent authIntent = new Intent("com.app.myplayer.STREAMLINK_ERROR");
+                        authIntent.setPackage(getPackageName());
+                        authIntent.putExtra("error", "YouTube requires cookie re-import.");
+                        authIntent.putExtra("cookie_auth_required", true);
+                        authIntent.putExtra("youtube_url", requestedUrl);
+                        sendBroadcast(authIntent);
+                        return;
+                    }
+
+                    if (resolvedStreamUrl.trim().isEmpty()
+                            || "None".equals(resolvedStreamUrl)) {
+                        throw new IllegalStateException(
+                                "yt-dlp returned an empty stream URL"
+                        );
+                    }
+
+                    Uri parsedUri = Uri.parse(resolvedStreamUrl);
+
+                    if (!"http".equalsIgnoreCase(parsedUri.getScheme())
+                            && !"https".equalsIgnoreCase(parsedUri.getScheme())) {
+                        throw new IllegalStateException(
+                                "yt-dlp returned an unsupported stream URL scheme"
+                        );
+                    }
+
+                    Log.i(TAG, "Stream URL resolved successfully");
+
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        if (player != null) {
+                            playYTStream(resolvedStreamUrl);
+                        } else {
+                            Log.e(TAG, "Player is unavailable");
+                            sendStreamlinkError("Player is unavailable");
+                        }
+                    });
+
+                } catch (Exception e) {
+                    Log.e(TAG, "Stream URL resolution failed", e);
+
+                    String errorMessage = e.getMessage();
+
+                    if (errorMessage == null || errorMessage.trim().isEmpty()) {
+                        errorMessage = e.getClass().getSimpleName();
+                    }
+
+                    sendStreamlinkError(errorMessage);
+                }
+            });
+
+        } else {
+
+            executor.execute(() -> {
+                try {
+                    Log.i(TAG, "Starting Streamlink...");
+                    if (!Python.isStarted()) {
+                        Python.start(new AndroidPlatform(this));
+                    }
+                    Python python = Python.getInstance();
+                    PyObject module = python.getModule("stream_helper");
+                    Log.i(TAG, "Checking Streamlink URL: " + streamUrl);
+                    PyObject validResult = module.callAttr("is_streaming_url", streamUrl);
+                    boolean valid = validResult.toBoolean();
+                    if (!valid) {
+                        Log.e(TAG, "Streamlink: no stream found");
+                        sendStreamlinkError("URL is not a valid Streamlink streaming URL");
+                        return;
+                    }
+                    Log.i(TAG, "Streamlink URL is valid");
+                    PyObject result = module.callAttr("get_stream_url", streamUrl);
+                    String streamUrl = result.toString();
+                    Log.i(TAG, "Stream URL: " + streamUrl);
+                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> playStream(streamUrl));
+                } catch (Exception e) {
+                    Log.e(TAG, "Streamlink failed", e);
+                    sendStreamlinkError(e.getMessage() != null ? e.getMessage() : "Streamlink error");
+                }
+            });
+        }
     }
 
     private void createNotificationChannel() {
@@ -162,7 +246,9 @@ public class PlaybackService extends MediaSessionService {
                     "Playback Service Channel",
                     NotificationManager.IMPORTANCE_LOW
             );
+
             NotificationManager manager = getSystemService(NotificationManager.class);
+
             if (manager != null) {
                 manager.createNotificationChannel(channel);
             }
@@ -178,75 +264,111 @@ public class PlaybackService extends MediaSessionService {
     public void onDestroy() {
         if (executor != null) {
             executor.shutdownNow();
+            executor = null;
         }
-        if (player != null) {
-            player.release();
-            player = null;
-        }
+
         if (mediaSession != null) {
             mediaSession.release();
             mediaSession = null;
         }
+
+        if (player != null) {
+            player.release();
+            player = null;
+        }
+
         super.onDestroy();
     }
-
-    /*
-    private void playLocalFile(String filePath) {
-
-        if (filePath == null || filePath.isEmpty()) {
-            Log.e(TAG, "Local file path kosong");
-            return;
-        }
-
-        File file = new File(filePath);
-
-        Log.i(TAG, "Local file path: " + filePath);
-        Log.i(TAG, "Local file exists: " + file.exists());
-        Log.i(TAG, "Local file readable: " + file.canRead());
-        Log.i(TAG, "Local file length: " + file.length());
-
-        if (!file.exists()) {
-            Log.e(TAG, "Local file tidak ditemukan");
-            return;
-        }
-
-        MediaItem mediaItem = MediaItem.fromUri(Uri.fromFile(file));
-
-        player.setMediaItem(mediaItem);
-        player.prepare();
-        player.play();
-
-        Log.i(TAG, "Playing local file: " + filePath);
-    }
-    */
 
     private void playLocalFiles(ArrayList<Uri> fileUris) {
         if (fileUris == null || fileUris.isEmpty()) {
             Log.e(TAG, "Local file Uri kosong");
             return;
         }
+
         ArrayList<MediaItem> mediaItems = new ArrayList<>();
+
         for (Uri fileUri : fileUris) {
             if (fileUri == null) {
                 continue;
             }
+
             Log.i(TAG, "Adding local file: " + fileUri);
             mediaItems.add(MediaItem.fromUri(fileUri));
         }
+
         if (mediaItems.isEmpty()) {
             Log.e(TAG, "Tidak ada MediaItem");
             return;
         }
+
+        if (player == null) {
+            Log.e(TAG, "Player is unavailable");
+            return;
+        }
+
         player.setMediaItems(mediaItems);
         player.prepare();
         player.play();
+
         Log.i(TAG, "Playing local playlist, count = " + mediaItems.size());
     }
 
     private void sendStreamlinkError(String message) {
         Intent intent = new Intent("com.app.myplayer.STREAMLINK_ERROR");
+        intent.setPackage(getPackageName());
         intent.putExtra("error", message);
         sendBroadcast(intent);
+    }
+
+    @OptIn(markerClass = UnstableApi.class)
+    private void playYTStream(String streamUrl) {
+        if (player == null) {
+            Log.e(TAG, "Cannot play stream: player is null");
+            return;
+        }
+
+        DefaultHttpDataSource.Factory httpDataSourceFactory =
+                new DefaultHttpDataSource.Factory()
+                        .setUserAgent(
+                                "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 "
+                                        + "(KHTML, like Gecko) Chrome/154.0.0.0 Mobile Safari/537.36"
+                        );
+
+        DefaultMediaSourceFactory mediaSourceFactory =
+                new DefaultMediaSourceFactory(httpDataSourceFactory);
+
+        player.setMediaSource(
+                mediaSourceFactory.createMediaSource(
+                        MediaItem.fromUri(Uri.parse(streamUrl))
+                )
+        );
+
+        player.prepare();
+        player.play();
+
+        Log.i(TAG, "Playback started");
+    }
+
+
+    private boolean isYouTubeUrl(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            return false;
+        }
+
+        String host = Uri.parse(url.trim()).getHost();
+
+        if (host == null) {
+            return false;
+        }
+
+        host = host.toLowerCase(Locale.ROOT);
+
+        return host.equals("youtu.be")
+                || host.equals("youtube.com")
+                || host.endsWith(".youtube.com")
+                || host.equals("youtube-nocookie.com")
+                || host.endsWith(".youtube-nocookie.com");
     }
 
     @OptIn(markerClass = UnstableApi.class)

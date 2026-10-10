@@ -60,10 +60,13 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Locale;
 
 import android.content.BroadcastReceiver;
 import android.content.IntentFilter;
@@ -71,7 +74,12 @@ import android.content.IntentFilter;
 import android.widget.FrameLayout;
 
 import android.view.inputmethod.InputMethodManager;
-import android.content.Context;
+
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.method.LinkMovementMethod;
+import android.text.style.ClickableSpan;
+import android.view.View;
 
 @UnstableApi
 public class MainActivity extends AppCompatActivity {
@@ -108,6 +116,10 @@ public class MainActivity extends AppCompatActivity {
     private View root;
     private View rootLayout;
 
+    private ActivityResultLauncher<String[]> cookieFilePicker;
+    private String pendingYouTubeUrl;
+    private boolean pendingYouTubeCookieRequired = false;
+
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -131,6 +143,70 @@ public class MainActivity extends AppCompatActivity {
         rootLayout.setFocusable(true);
         rootLayout.setFocusableInTouchMode(true);
         root.requestFocus();
+
+
+        cookieFilePicker = registerForActivityResult(
+                new ActivityResultContracts.OpenDocument(),
+                uri -> {
+                    String url = pendingYouTubeUrl;
+                    boolean cookieRequired = pendingYouTubeCookieRequired;
+
+                    pendingYouTubeUrl = null;
+                    pendingYouTubeCookieRequired = false;
+
+                    if (url == null || url.trim().isEmpty()) {
+                        return;
+                    }
+
+                    if (uri == null) {
+                        if (cookieRequired) {
+                            Toast.makeText(
+                                    this,
+                                    "Cookie replacement cancelled",
+                                    Toast.LENGTH_SHORT
+                            ).show();
+                            return;
+                        }
+
+                        Toast.makeText(
+                                this,
+                                "Cookie selection cancelled; trying playback without cookies",
+                                Toast.LENGTH_SHORT
+                        ).show();
+
+                        startPlaybackService(url);
+                        return;
+                    }
+
+                    try {
+                        copyCookieFile(uri);
+
+                        File cookieFile = new File(getFilesDir(), "youtube_cookies.txt");
+
+                        if (!cookieFile.isFile() || cookieFile.length() == 0) {
+                            throw new IOException("The selected cookie file is empty");
+                        }
+
+                        Toast.makeText(
+                                this,
+                                "YouTube cookies imported",
+                                Toast.LENGTH_SHORT
+                        ).show();
+
+                        startPlaybackService(url);
+
+                    } catch (IOException e) {
+                        Log.e(TAG, "Failed to import YouTube cookies", e);
+
+                        Toast.makeText(
+                                this,
+                                "Failed to import cookies: " + e.getMessage(),
+                                Toast.LENGTH_LONG
+                        ).show();
+                    }
+                }
+        );
+
 
         urlInput.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus) {
@@ -172,14 +248,22 @@ public class MainActivity extends AppCompatActivity {
                 Log.i(TAG, "Starting PlaybackService");
                 Log.i(TAG, "YouTube URL: " + STREAMING_URL);
 
-                Intent intent = new Intent(MainActivity.this, PlaybackService.class);
-                intent.putExtra("EXTRA_STREAMING_URL", STREAMING_URL);
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(intent);
+                if (isYouTubeUrl(STREAMING_URL)) {
+                    File cookieFile = new File(getFilesDir(), "youtube_cookies.txt");
+
+                    if (cookieFile.isFile() && cookieFile.length() > 0) {
+                        startPlaybackService(STREAMING_URL);
+                    } else {
+                        pendingYouTubeUrl = STREAMING_URL;
+                        pendingYouTubeCookieRequired = false;
+                        browseYouTubeCookies();
+                    }
                 } else {
-                    startService(intent);
+                    startPlaybackService(STREAMING_URL);
                 }
+
+
             } else {
                 Toast.makeText(MainActivity.this, "URL can't be empty", Toast.LENGTH_SHORT).show();
             }
@@ -1400,15 +1484,200 @@ public class MainActivity extends AppCompatActivity {
     private final BroadcastReceiver streamlinkErrorReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
+            boolean cookieAuthRequired =
+                    intent.getBooleanExtra("cookie_auth_required", false);
+
+            if (cookieAuthRequired) {
+                String url = intent.getStringExtra("youtube_url");
+
+                if (url == null || url.trim().isEmpty()) {
+                    url = STREAMING_URL;
+                }
+
+                final String failedUrl = url;
+
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("YouTube Cookie Needs Updating")
+                        .setMessage(
+                                "YouTube reported an authentication problem. " +
+                                        "This can mean the cookie is no longer accepted, " +
+                                        "but it may also be a YouTube verification issue.\n\n" +
+                                        "Would you like to import a replacement cookie file?"
+                        )
+                        .setPositiveButton("Import New Cookie", (dialog, which) -> {
+                            pendingYouTubeUrl = failedUrl;
+                            pendingYouTubeCookieRequired = true;
+                            browseYouTubeCookies();
+                        })
+                        .setNegativeButton("Cancel", null)
+                        .show();
+
+                return;
+            }
 
             String error = intent.getStringExtra("error");
 
             if (error == null || error.isEmpty()) {
-                error = "Unknown Streamlink error";
+                error = "Unknown playback error";
             }
 
-            Toast.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
+            Toast.makeText(
+                    MainActivity.this,
+                    error,
+                    Toast.LENGTH_LONG
+            ).show();
         }
     };
+
+    private void browseYouTubeCookies() {
+        String message =
+                        "Please select your youtube_cookies.txt file.\n\n" +
+                        "This file is used by MyPlayer to authenticate with YouTube when necessary.\n\n" +
+                        "How to get the file:\n" +
+                        "1. Use Kiwi Browser or other browser that support extension.\n" +
+                        "2. Install the Get cookies.txt LOCALLY extension.\n" +
+                        "3. Login into your YouTube account.\n" +
+                        "4. Using that extension, export your YouTube cookies in Netscape cookies.txt format.\n" +
+                        "5. Save the file as youtube_cookies.txt.\n" +
+                        "6. Select that file with this dialog SELECT FILE link below.\n\n" +
+                        "Important!\n" +
+                        "Do not share this cookie file!\n" +
+                        "It contains sensitive session information that may allow access to your account!";
+
+        SpannableString spannableMessage = new SpannableString(message);
+
+        // Link Kiwi Browser
+        String kiwiLinkText = "Kiwi Browser";
+        int kiwiStart = message.indexOf(kiwiLinkText);
+        int kiwiEnd = kiwiStart + kiwiLinkText.length();
+
+        spannableMessage.setSpan(
+                new ClickableSpan() {
+                    @Override
+                    public void onClick(View widget) {
+                        startActivity(new Intent(
+                                Intent.ACTION_VIEW,
+                                android.net.Uri.parse(
+                                        "https://github.com/kiwibrowser/src.next/releases"
+                                )
+                        ));
+                    }
+                },
+                kiwiStart,
+                kiwiEnd,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        );
+
+        // Link Get cookies.txt LOCALLY
+        String cookieLinkText = "Get cookies.txt LOCALLY";
+        int cookieStart = message.indexOf(cookieLinkText);
+        int cookieEnd = cookieStart + cookieLinkText.length();
+
+        spannableMessage.setSpan(
+                new ClickableSpan() {
+                    @Override
+                    public void onClick(View widget) {
+                        startActivity(new Intent(
+                                Intent.ACTION_VIEW,
+                                android.net.Uri.parse(
+                                        "https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc"
+                                )
+                        ));
+                    }
+                },
+                cookieStart,
+                cookieEnd,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        );
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Import YouTube Cookies")
+                .setMessage(spannableMessage)
+                .setPositiveButton("Select File", (d, which) -> {
+                    cookieFilePicker.launch(
+                            new String[]{"text/plain", "application/octet-stream"}
+                    );
+                })
+                .setNegativeButton("Cancel", null)
+                .create();
+
+        dialog.show();
+
+        TextView messageView = dialog.findViewById(android.R.id.message);
+        if (messageView != null) {
+            messageView.setMovementMethod(LinkMovementMethod.getInstance());
+        }
+
+    }
+
+    private void copyCookieFile(Uri uri) throws IOException {
+        File destination = new File(getFilesDir(), "youtube_cookies.txt");
+        File temporary = new File(getFilesDir(), "youtube_cookies.tmp");
+
+        try (InputStream input = getContentResolver().openInputStream(uri)) {
+            if (input == null) {
+                throw new IOException("Cannot open selected cookie file");
+            }
+
+            try (OutputStream output = new FileOutputStream(temporary)) {
+                byte[] buffer = new byte[8192];
+                int length;
+
+                while ((length = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, length);
+                }
+
+                output.flush();
+            }
+        } catch (IOException e) {
+            temporary.delete();
+            throw e;
+        }
+
+        if (destination.exists() && !destination.delete()) {
+            temporary.delete();
+            throw new IOException("Cannot replace existing cookie file");
+        }
+
+        if (!temporary.renameTo(destination)) {
+            temporary.delete();
+            throw new IOException("Cannot save cookie file");
+        }
+
+        Log.i(TAG, "YouTube cookies saved to: " + destination.getAbsolutePath());
+    }
+
+    private boolean isYouTubeUrl(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            return false;
+        }
+
+        String host = Uri.parse(url.trim()).getHost();
+
+        if (host == null) {
+            return false;
+        }
+
+        host = host.toLowerCase(Locale.ROOT);
+
+        return host.equals("youtu.be")
+                || host.equals("youtube.com")
+                || host.endsWith(".youtube.com")
+                || host.equals("youtube-nocookie.com")
+                || host.endsWith(".youtube-nocookie.com");
+    }
+
+    private void startPlaybackService(String url) {
+        Intent intent = new Intent(MainActivity.this, PlaybackService.class);
+        intent.putExtra("EXTRA_STREAMING_URL", url);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent);
+        } else {
+            startService(intent);
+        }
+
+        Log.i(TAG, "PlaybackService started for URL: " + url);
+    }
 
 }
