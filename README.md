@@ -15,6 +15,10 @@ Install the Get cookies.txt LOCALLY extension (https://chromewebstore.google.com
 
 After that now you can select that file when the Import Youtube Cookies dialogue shown up.
 
+IMPORTANT NOTES!
+
+Do not share that cookie file! It contains sensitive session information that may allow access to your account!
+
 Check my SPEECH RECOGNITIION + TRANSLATE PROJECTS : https://github.com/botbahlul?tab=repositories
 
 Buy me coffee : https://sociabuzz.com/botbahlul/tribe
