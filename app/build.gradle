@@ -10,6 +10,12 @@ android {
 
     useLibrary 'org.apache.http.legacy'
 
+	packagingOptions {
+		jniLibs {
+			useLegacyPackaging = true
+		}
+	}
+
 // Untuk AGP versi baru (7.0+)
 	androidResources {
 		noCompress 'tar', 'gz', 'tgz', 'tar.gz'
@@ -26,7 +32,7 @@ android {
         targetSdk 33
 
         versionCode 1
-        versionName "1.0.1"
+        versionName "1.0.2"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
@@ -47,7 +53,7 @@ android {
 		python {
 			version "3.10"
 
-			buildPython "C:\\Program Files\\Python310\\python.exe"
+			buildPython "C:\\Users\\Toshiba\\AppData\\Local\\Programs\\Python\\Python310\\python.exe"
 
 			pip {
 				install "yt-dlp[default]"
@@ -88,19 +94,22 @@ android {
 dependencies {
 	implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
 
-	implementation 'androidx.core:core-ktx:1.7.0'
+	//implementation 'androidx.core:core-ktx:1.7.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.9.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    //implementation 'com.google.android.material:material:1.9.0'
+    //implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 
-    implementation "androidx.media3:media3-exoplayer:1.0.1"
+	implementation "androidx.documentfile:documentfile:1.0.1"
+	implementation "androidx.media3:media3-exoplayer:1.0.1"
     implementation "androidx.media3:media3-ui:1.0.1"
     implementation "androidx.media3:media3-exoplayer-hls:1.0.1"
+	implementation "androidx.media3:media3-exoplayer-dash:1.0.1"
+	//implementation "androidx.media3:media3-decoder-av1:1.0.1"
 	implementation "androidx.media3:media3-session:1.0.1"
     //implementation 'org.jbundle.util.osgi.wrapped:org.jbundle.util.osgi.wrapped.org.apache.http.client:4.1.2'
 	implementation 'com.google.firebase:firebase-database:20.0.4'
 
-	testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+	//testImplementation 'junit:junit:4.13.2'
+    //androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    //androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 }

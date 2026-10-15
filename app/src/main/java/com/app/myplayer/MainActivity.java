@@ -53,7 +53,12 @@ import androidx.media3.ui.PlayerView;
 import androidx.media3.ui.DefaultTimeBar;
 import android.view.ViewGroup;
 import androidx.media3.ui.TimeBar;
+import androidx.media3.common.C;
+import androidx.media3.common.Tracks;
+import androidx.media3.ui.TrackSelectionDialogBuilder;
 
+import com.chaquo.python.Python;
+import com.chaquo.python.android.AndroidPlatform;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.io.File;
@@ -79,7 +84,9 @@ import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.method.LinkMovementMethod;
 import android.text.style.ClickableSpan;
-import android.view.View;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 @UnstableApi
 public class MainActivity extends AppCompatActivity {
@@ -119,6 +126,7 @@ public class MainActivity extends AppCompatActivity {
     private ActivityResultLauncher<String[]> cookieFilePicker;
     private String pendingYouTubeUrl;
     private boolean pendingYouTubeCookieRequired = false;
+    private String pendingCookieFileName = "youtube_cookies.txt";
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
@@ -128,8 +136,11 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         urlInput = findViewById(R.id.url_input);
         playerView = findViewById(R.id.player_view);
-        playerView = findViewById(R.id.player_view);
         setTimeBarColor(playerView);
+        View settingsButton = playerView.findViewById(androidx.media3.ui.R.id.exo_settings);
+        if (settingsButton != null) {
+            settingsButton.setOnClickListener(v -> showPlayerSettingsDialog());
+        }
         buttonEmbed = findViewById(R.id.button_embed);
         buttonOpenLocalFiles = findViewById(R.id.button_open_local_files);
         textViewSelectedFilePath = findViewById(R.id.textview_filePath);
@@ -144,24 +155,33 @@ public class MainActivity extends AppCompatActivity {
         rootLayout.setFocusableInTouchMode(true);
         root.requestFocus();
 
+        if (!Python.isStarted()) {
+            Python.start(new AndroidPlatform(getApplicationContext()));
+        }
 
-        cookieFilePicker = registerForActivityResult(
-                new ActivityResultContracts.OpenDocument(),
-                uri -> {
+        logVideoDecoders();
+
+        cookieFilePicker = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
                     String url = pendingYouTubeUrl;
                     boolean cookieRequired = pendingYouTubeCookieRequired;
+                    String cookieFileName = pendingCookieFileName;
 
                     pendingYouTubeUrl = null;
                     pendingYouTubeCookieRequired = false;
+                    pendingCookieFileName = "youtube_cookies.txt";
 
                     if (url == null || url.trim().isEmpty()) {
                         return;
                     }
 
+                    if (cookieFileName == null || cookieFileName.trim().isEmpty()) {
+                        cookieFileName = cookieFileNameForUrl(url);
+                    }
+
                     if (uri == null) {
                         if (cookieRequired) {
                             Toast.makeText(
-                                    this,
+                                    MainActivity.this,
                                     "Cookie replacement cancelled",
                                     Toast.LENGTH_SHORT
                             ).show();
@@ -169,7 +189,7 @@ public class MainActivity extends AppCompatActivity {
                         }
 
                         Toast.makeText(
-                                this,
+                                MainActivity.this,
                                 "Cookie selection cancelled; trying playback without cookies",
                                 Toast.LENGTH_SHORT
                         ).show();
@@ -179,52 +199,98 @@ public class MainActivity extends AppCompatActivity {
                     }
 
                     try {
-                        copyCookieFile(uri);
+                        copyCookieFile(uri, cookieFileName);
 
-                        File cookieFile = new File(getFilesDir(), "youtube_cookies.txt");
+                        File cookieFile = new File(getFilesDir(), cookieFileName);
 
                         if (!cookieFile.isFile() || cookieFile.length() == 0) {
                             throw new IOException("The selected cookie file is empty");
                         }
 
+                        String provider;
+                        if ("youtube_cookies.txt".equals(cookieFileName)) {
+                            provider = "YouTube";
+                        } else if ("vimeo_cookies.txt".equals(cookieFileName)) {
+                            provider = "Vimeo";
+                        } else if ("vidio_cookies.txt".equals(cookieFileName)) {
+                            provider = "Vidio";
+                        } else {
+                            provider = cookieFileName;
+                        }
+
                         Toast.makeText(
-                                this,
-                                "YouTube cookies imported",
+                                MainActivity.this,
+                                provider + " cookies imported",
                                 Toast.LENGTH_SHORT
                         ).show();
 
-                        startPlaybackService(url);
+                        /*
+                        if (av1Retry) {
+                            Intent retryIntent = new Intent(MainActivity.this, PlaybackService.class);
+                            retryIntent.setAction("com.app.myplayer.TEST_VIMEO_AV1");
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startForegroundService(retryIntent);
+                            } else {
+                                startService(retryIntent);
+                            }
+                        } else {
+                            startPlaybackService(url);
+                        }
+                        */
 
                     } catch (IOException e) {
-                        Log.e(TAG, "Failed to import YouTube cookies", e);
+                        Log.e(TAG, "Failed to import " + cookieFileName, e);
 
                         Toast.makeText(
-                                this,
+                                MainActivity.this,
                                 "Failed to import cookies: " + e.getMessage(),
                                 Toast.LENGTH_LONG
                         ).show();
+
+                        if (cookieRequired) {
+                            pendingYouTubeUrl = url;
+                            pendingYouTubeCookieRequired = true;
+                            pendingCookieFileName = cookieFileName;
+
+                            new AlertDialog.Builder(MainActivity.this)
+                                    .setTitle("Cookie Import Failed")
+                                    .setMessage(
+                                            "The cookie file could not be imported.\n\n"
+                                                    + "Please select a valid file and try again."
+                                    )
+                                    .setPositiveButton(
+                                            "Import Again",
+                                            (dialog, which) -> cookieFilePicker.launch(
+                                                    new String[]{
+                                                            "text/plain",
+                                                            "application/octet-stream"
+                                                    }
+                                            )
+                                    )
+                                    .setNegativeButton("Cancel", null)
+                                    .show();
+                        }
                     }
                 }
         );
-
 
         urlInput.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus) {
                 return;
             }
-            Log.d(TAG, "urlInput got focus");
+            //Log.d(TAG, "urlInput got focus");
         });
 
         root.setOnClickListener(view -> {
             urlInput.clearFocus();
             root.requestFocus();
-            Log.d(TAG, "root request focus");
+            //Log.d(TAG, "root request focus");
         });
 
         rootLayout.setOnClickListener(view -> {
             urlInput.clearFocus();
             rootLayout.requestFocus();
-            Log.d(TAG, "rootLayout request focus");
+            //Log.d(TAG, "rootLayout request focus");
         });
 
         root.setOnFocusChangeListener((v, hasFocus) -> {
@@ -240,39 +306,70 @@ public class MainActivity extends AppCompatActivity {
         });
 
         buttonEmbed.setOnClickListener(view -> {
-            STREAMING_URL = urlInput.getText().toString().trim(); // Must be declare before check isEmpty()
-            if (!STREAMING_URL.isEmpty()) {
-                urlInput.clearFocus();
-                buttonEmbed.requestFocus();
-                Log.d(TAG, "buttonEmbed request focus");
-                Log.i(TAG, "Starting PlaybackService");
-                Log.i(TAG, "YouTube URL: " + STREAMING_URL);
+            STREAMING_URL = urlInput.getText().toString().toLowerCase().trim();
+            STREAMING_URL = urlInput.getText().toString().trim().replace("https://m.", "https://www.");
+            Log.d(TAG, "onCreate: STREAMING_URL = " + STREAMING_URL);
 
+            if (STREAMING_URL.isEmpty()) {
+                Toast.makeText(
+                        MainActivity.this,
+                        "URL can't be empty",
+                        Toast.LENGTH_SHORT
+                ).show();
+                return;
+            }
 
-                if (isYouTubeUrl(STREAMING_URL)) {
-                    File cookieFile = new File(getFilesDir(), "youtube_cookies.txt");
+            urlInput.clearFocus();
+            buttonEmbed.requestFocus();
 
-                    if (cookieFile.isFile() && cookieFile.length() > 0) {
-                        startPlaybackService(STREAMING_URL);
-                    } else {
-                        pendingYouTubeUrl = STREAMING_URL;
-                        pendingYouTubeCookieRequired = false;
-                        browseYouTubeCookies();
-                    }
-                } else {
+            Log.i(TAG, "Starting PlaybackService");
+            Log.i(TAG, "Streaming URL: " + STREAMING_URL);
+
+            if (isVidioUrl(STREAMING_URL)) {
+                File cookieFile = new File(getFilesDir(), "vidio_cookies.txt");
+
+                if (cookieFile.isFile() && cookieFile.length() > 0) {
                     startPlaybackService(STREAMING_URL);
+                } else {
+                    pendingYouTubeUrl = STREAMING_URL;
+                    pendingYouTubeCookieRequired = false;
+                    pendingCookieFileName = "vidio_cookies.txt";
+                    browseVimeoCookies();
+                }
+            }
+            else if (isVimeoUrl(STREAMING_URL)) {
+                File cookieFile = new File(getFilesDir(), "vimeo_cookies.txt");
+
+                if (cookieFile.isFile() && cookieFile.length() > 0) {
+                    startPlaybackService(STREAMING_URL);
+                } else {
+                    pendingYouTubeUrl = STREAMING_URL;
+                    pendingYouTubeCookieRequired = false;
+                    pendingCookieFileName = "vimeo_cookies.txt";
+                    browseVimeoCookies();
                 }
 
+            } else if (isYouTubeUrl(STREAMING_URL)) {
+                File cookieFile = new File(getFilesDir(), "youtube_cookies.txt");
+
+                if (cookieFile.isFile() && cookieFile.length() > 0) {
+                    startPlaybackService(STREAMING_URL);
+                } else {
+                    pendingYouTubeUrl = STREAMING_URL;
+                    pendingYouTubeCookieRequired = false;
+                    pendingCookieFileName = "youtube_cookies.txt";
+                    browseYouTubeCookies();
+                }
 
             } else {
-                Toast.makeText(MainActivity.this, "URL can't be empty", Toast.LENGTH_SHORT).show();
+                startPlaybackService(STREAMING_URL);
             }
         });
 
         buttonOpenLocalFiles.setOnClickListener(view -> {
             urlInput.clearFocus();
             buttonOpenLocalFiles.requestFocus();
-            Log.d(TAG, "buttonOpenLocalFiles request focus");
+            //Log.d(TAG, "buttonOpenLocalFiles request focus");
             selectedFilesUri = null;
             selectedFilesUri = new ArrayList<>();
             selectedFilesPath = null;
@@ -302,7 +399,7 @@ public class MainActivity extends AppCompatActivity {
         buttonGrantStoragePermission.setOnClickListener(view -> {
             urlInput.clearFocus();
             buttonGrantStoragePermission.requestFocus();
-            Log.d(TAG, "buttonGrantStoragePermission request focus");
+            //Log.d(TAG, "buttonGrantStoragePermission request focus");
             if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, STORAGE_PERMISSION_CODE);
             }
@@ -312,7 +409,7 @@ public class MainActivity extends AppCompatActivity {
             buttonGrantManageAppAllFilesAccessPermission.setOnClickListener(view -> {
                 urlInput.clearFocus();
                 buttonGrantManageAppAllFilesAccessPermission.requestFocus();
-                Log.d(TAG, "buttonGrantManageAppAllFilesAccessPermission request focus");
+                //Log.d(TAG, "buttonGrantManageAppAllFilesAccessPermission request focus");
                 if (!Environment.isExternalStorageManager()) {
                     try {
                         Uri uri = Uri.parse("package:${BuildConfig.LIBRARY_PACKAGE_NAME}");
@@ -337,7 +434,7 @@ public class MainActivity extends AppCompatActivity {
         buttonGrantPersistedttreeUriPermission.setOnClickListener(view -> {
             urlInput.clearFocus();
             buttonGrantPersistedttreeUriPermission.requestFocus();
-            Log.d(TAG, "buttonGrantPersistedttreeUriPermission request focus");
+            //Log.d(TAG, "buttonGrantPersistedttreeUriPermission request focus");
             savedTreesUri = loadSavedTreeUrisFromSharedPreference();
             Log.d("onCreated", "savedTreesUri.size() = " + savedTreesUri.size());
             for (int i=0; i<savedTreesUri.size(); i++) {
@@ -511,33 +608,40 @@ public class MainActivity extends AppCompatActivity {
         Log.i(TAG, "Connecting MediaController...");
         SessionToken sessionToken = new SessionToken(
                 this,
-                new ComponentName(
-                        this,
-                        PlaybackService.class
-                )
+                new ComponentName(this, PlaybackService.class)
         );
 
-        controllerFuture = new MediaController.Builder(this, sessionToken).buildAsync();
-        controllerFuture.addListener(() -> {
+        final ListenableFuture<MediaController> future =
+                new MediaController.Builder(this, sessionToken).buildAsync();
+        controllerFuture = future;
+
+        future.addListener(() -> {
+            // this connection is late (onStop happened or there is newer connection)
+            if (future != controllerFuture || isFinishing() || isDestroyed()) {
+                return;
+            }
+
             try {
-                mediaController = controllerFuture.get();
+                mediaController = future.get();
                 Log.i(TAG, "MediaController connected");
-                // Hubungkan PlayerView ke ExoPlayeryang berada di PlaybackService melalui MediaController
+
                 playerView.setPlayer(mediaController);
+
                 playerView.setFullscreenButtonClickListener(isFullscreen -> {
                     if (isFullscreen) {
                         enterFullscreen();
-                        playerView.setShowSubtitleButton(true);
                     } else {
                         exitFullscreen();
-                        playerView.setShowSubtitleButton(true);
                     }
+                    playerView.setShowSubtitleButton(true);
                 });
+                playerView.setShowSubtitleButton(true);
+
             } catch (Exception e) {
                 Log.e(TAG, "Failed to connect MediaController", e);
             }
-
         }, ContextCompat.getMainExecutor(this));
+
         playerView.setShowSubtitleButton(true);
     }
 
@@ -1481,34 +1585,37 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+
     private final BroadcastReceiver streamlinkErrorReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            boolean cookieAuthRequired =
-                    intent.getBooleanExtra("cookie_auth_required", false);
+            boolean cookieAuthRequired = intent.getBooleanExtra("cookie_auth_required", false);
 
             if (cookieAuthRequired) {
-                String url = intent.getStringExtra("youtube_url");
+                String failedUrl = intent.getStringExtra("request_url");
 
-                if (url == null || url.trim().isEmpty()) {
-                    url = STREAMING_URL;
+                if (failedUrl == null || failedUrl.trim().isEmpty()) {
+                    failedUrl = STREAMING_URL;
                 }
 
-                final String failedUrl = url;
+                final String url = failedUrl;
+
+                pendingYouTubeUrl = url;
+                pendingYouTubeCookieRequired = true;
+                pendingCookieFileName = cookieFileNameForUrl(url);
 
                 new AlertDialog.Builder(MainActivity.this)
-                        .setTitle("YouTube Cookie Needs Updating")
+                        .setTitle("Cookies Need Updating")
                         .setMessage(
-                                "YouTube reported an authentication problem. " +
-                                        "This can mean the cookie is no longer accepted, " +
-                                        "but it may also be a YouTube verification issue.\n\n" +
-                                        "Would you like to import a replacement cookie file?"
+                                "The website rejected the current cookies or requires authentication.\n\n"
+                                        + "Import a valid Netscape-format cookies.txt file for this website. "
+                                        + "MyPlayer will retry the original URL after importing it."
                         )
-                        .setPositiveButton("Import New Cookie", (dialog, which) -> {
-                            pendingYouTubeUrl = failedUrl;
-                            pendingYouTubeCookieRequired = true;
-                            browseYouTubeCookies();
-                        })
+                        .setPositiveButton("Import Cookies", (dialog, which) ->
+                                cookieFilePicker.launch(
+                                        new String[]{"text/plain", "application/octet-stream"}
+                                )
+                        )
                         .setNegativeButton("Cancel", null)
                         .show();
 
@@ -1528,6 +1635,7 @@ public class MainActivity extends AppCompatActivity {
             ).show();
         }
     };
+
 
     private void browseYouTubeCookies() {
         String message =
@@ -1610,9 +1718,9 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private void copyCookieFile(Uri uri) throws IOException {
-        File destination = new File(getFilesDir(), "youtube_cookies.txt");
-        File temporary = new File(getFilesDir(), "youtube_cookies.tmp");
+    private void copyCookieFile(Uri uri, String cookieFileName) throws IOException {
+        File destination = new File(getFilesDir(), cookieFileName);
+        File temporary = new File(getFilesDir(), cookieFileName.replace(".txt", ".tmp"));
 
         try (InputStream input = getContentResolver().openInputStream(uri)) {
             if (input == null) {
@@ -1644,7 +1752,7 @@ public class MainActivity extends AppCompatActivity {
             throw new IOException("Cannot save cookie file");
         }
 
-        Log.i(TAG, "YouTube cookies saved to: " + destination.getAbsolutePath());
+        Log.i(TAG, cookieFileName + " saved to: " + destination.getAbsolutePath());
     }
 
     private boolean isYouTubeUrl(String url) {
@@ -1667,6 +1775,40 @@ public class MainActivity extends AppCompatActivity {
                 || host.endsWith(".youtube-nocookie.com");
     }
 
+    private boolean isVimeoUrl(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            return false;
+        }
+
+        String host = Uri.parse(url.trim()).getHost();
+
+        if (host == null) {
+            return false;
+        }
+
+        host = host.toLowerCase(Locale.ROOT);
+
+        return host.equals("vimeo.com")
+                || host.endsWith(".vimeo.com");
+    }
+
+    private boolean isVidioUrl(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            return false;
+        }
+
+        String host = Uri.parse(url.trim()).getHost();
+
+        if (host == null) {
+            return false;
+        }
+
+        host = host.toLowerCase(Locale.ROOT);
+
+        return host.equals("vidio.com")
+                || host.endsWith(".vidio.com");
+    }
+
     private void startPlaybackService(String url) {
         Intent intent = new Intent(MainActivity.this, PlaybackService.class);
         intent.putExtra("EXTRA_STREAMING_URL", url);
@@ -1678,6 +1820,186 @@ public class MainActivity extends AppCompatActivity {
         }
 
         Log.i(TAG, "PlaybackService started for URL: " + url);
+    }
+
+
+    private void browseVimeoCookies() {
+        String message =
+                "Please select your vimeo_cookies.txt file.\n\n" +
+                        "This file is used by MyPlayer to authenticate with Vimeo when necessary.\n\n" +
+                        "How to get the file:\n" +
+                        "1. Open Vimeo in a browser that supports cookie-export extensions.\n" +
+                        "2. Log in to your Vimeo account if required.\n" +
+                        "3. Export Vimeo cookies in Netscape cookies.txt format.\n" +
+                        "4. Save the file as vimeo_cookies.txt.\n" +
+                        "5. Select the file using SELECT FILE below.\n\n" +
+                        "Important!\n" +
+                        "Do not share this cookie file!\n" +
+                        "It contains sensitive session information that may allow access to your account.";
+
+        pendingCookieFileName = "vimeo_cookies.txt";
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Import Vimeo Cookies")
+                .setMessage(message)
+                .setPositiveButton("Select File", (d, which) -> {
+                    cookieFilePicker.launch(
+                            new String[]{"text/plain", "application/octet-stream"}
+                    );
+                })
+                .setNegativeButton("Cancel", null)
+                .create();
+
+        dialog.show();
+    }
+
+    private void logVideoDecoders() {
+        android.media.MediaCodecList codecList =
+                new android.media.MediaCodecList(
+                        android.media.MediaCodecList.ALL_CODECS
+                );
+
+        for (android.media.MediaCodecInfo codecInfo : codecList.getCodecInfos()) {
+            if (codecInfo.isEncoder()) {
+                continue;
+            }
+
+            for (String type : codecInfo.getSupportedTypes()) {
+                if (type.startsWith("video/")) {
+                    android.util.Log.d(
+                            "MyPlayer-Decoder",
+                            "name=" + codecInfo.getName()
+                                    + ", type=" + type
+                    );
+                }
+            }
+        }
+    }
+
+
+    private String cookieFileNameForUrl(String url) {
+        String host = Uri.parse(url.trim()).getHost();
+
+        if (host == null || host.trim().isEmpty()) {
+            return "cookies_unknown.txt";
+        }
+
+        host = host.toLowerCase(Locale.ROOT);
+
+        if (host.equals("youtube.com")
+                || host.endsWith(".youtube.com")
+                || host.equals("youtu.be")) {
+            return "youtube_cookies.txt";
+        }
+
+        if (host.equals("vimeo.com") || host.endsWith(".vimeo.com")) {
+            return "vimeo_cookies.txt";
+        }
+
+        if (host.equals("vidio.com") || host.endsWith(".vidio.com")) {
+            return "vidio_cookies.txt";
+        }
+
+        String safeHost = host.replaceAll("[^a-z0-9._-]", "_");
+        return "cookies_" + safeHost + ".txt";
+    }
+
+    private void showPlayerSettingsDialog() {
+        ArrayList<String> labels = new ArrayList<>();
+        ArrayList<Runnable> actions = new ArrayList<>();
+
+        labels.add("Quality");
+        actions.add(this::showQualityDialog);
+
+        if (mediaController != null) {
+            Tracks tracks = mediaController.getCurrentTracks();
+
+            if (tracks.containsType(C.TRACK_TYPE_AUDIO)) {
+                labels.add("Audio");
+                actions.add(() -> showTrackDialog("Audio", C.TRACK_TYPE_AUDIO));
+            }
+            if (tracks.containsType(C.TRACK_TYPE_TEXT)) {
+                labels.add("Subtitles");
+                actions.add(() -> showTrackDialog("Subtitles", C.TRACK_TYPE_TEXT));
+            }
+        }
+
+        labels.add("Playback speed");
+        actions.add(this::showSpeedDialog);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Settings")
+                .setItems(labels.toArray(new String[0]), (d, which) -> actions.get(which).run())
+                .show();
+    }
+
+    private void showTrackDialog(String title, int trackType) {
+        if (mediaController == null) return;
+
+        new TrackSelectionDialogBuilder(this, title, mediaController, trackType)
+                .build()
+                .show();
+    }
+
+    private void showQualityDialog() {
+        try {
+            JSONArray arr = new JSONArray(PlaybackService.sChoicesJson);
+
+            if (arr.length() == 0) {
+                Toast.makeText(this, "No quality options available for this stream",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            ArrayList<String> ids = new ArrayList<>();
+            ArrayList<String> labels = new ArrayList<>();
+            ids.add("auto");
+            labels.add("Auto (default)");
+
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject c = arr.getJSONObject(i);
+                ids.add(c.getString("id"));
+                labels.add(c.getString("label"));
+            }
+
+            int checked = Math.max(0, ids.indexOf(PlaybackService.sSelectedChoiceId));
+
+            new AlertDialog.Builder(this)
+                    .setTitle("Quality")
+                    .setSingleChoiceItems(labels.toArray(new String[0]), checked, (d, which) -> {
+                        Intent intent = new Intent(this, PlaybackService.class);
+                        intent.setAction("com.app.myplayer.SELECT_FORMAT");
+                        intent.putExtra("format_id", ids.get(which));
+                        startService(intent);
+                        d.dismiss();
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show();
+
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to show quality dialog", e);
+        }
+    }
+
+    private void showSpeedDialog() {
+        if (mediaController == null) return;
+
+        final float[] speeds = {0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f};
+        final String[] labels = {"0.5x", "0.75x", "Normal", "1.25x", "1.5x", "2x"};
+
+        int checked = 2;
+        float current = mediaController.getPlaybackParameters().speed;
+        for (int i = 0; i < speeds.length; i++) {
+            if (Math.abs(speeds[i] - current) < 0.01f) checked = i;
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Playback speed")
+                .setSingleChoiceItems(labels, checked, (d, which) -> {
+                    mediaController.setPlaybackSpeed(speeds[which]);
+                    d.dismiss();
+                })
+                .show();
     }
 
 }
