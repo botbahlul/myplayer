@@ -1,5 +1,5 @@
 # MyPlayer
-A simple ANDROID APP that can PLAY LOCAL MEDIA FILES and STREAMING URL supported by [Streamlink](https://github.com/streamlink/streamlink) and [yt-dlp](https://github.com/yt-dlp/yt-dlp) SMOOTHLY (using media3-exoplayer) so my other app Live Subtitle V1 (https://github.com/botbahlul/Live-Subtitle) and Live Subtitle V2 (https://github.com/botbahlul/Live-Subtitle-V2) which is using that FREE ANDROID GOOGLE SPEECH RECOGNIZER can do the Speech Recognition without any audio/video interruption.
+A simple ANDROID APP that can PLAY LOCAL MEDIA FILES and STREAMING URL supported by [Streamlink](https://github.com/streamlink/streamlink) and [yt-dlp](https://github.com/yt-dlp/yt-dlp) SMOOTHLY (using media3-exoplayer) so my other app [Live Subtitle V1](https://github.com/botbahlul/Live-Subtitle) and Live [Subtitle V2](https://github.com/botbahlul/Live-Subtitle-V2) which is using that FREE ANDROID GOOGLE SPEECH RECOGNIZER can do the Speech Recognition without any audio/video interruption.
 
 All this long I've been looking for a player which can play continously when I run my Live Subtitle app whithout any luck.
 
