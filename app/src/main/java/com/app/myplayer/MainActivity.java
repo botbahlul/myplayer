@@ -327,16 +327,7 @@ public class MainActivity extends AppCompatActivity {
             Log.i(TAG, "Streaming URL: " + STREAMING_URL);
 
             if (isVidioUrl(STREAMING_URL)) {
-                File cookieFile = new File(getFilesDir(), "vidio_cookies.txt");
-
-                if (cookieFile.isFile() && cookieFile.length() > 0) {
-                    startPlaybackService(STREAMING_URL);
-                } else {
-                    pendingYouTubeUrl = STREAMING_URL;
-                    pendingYouTubeCookieRequired = false;
-                    pendingCookieFileName = "vidio_cookies.txt";
-                    browseVimeoCookies();
-                }
+                startPlaybackService(STREAMING_URL);
             }
             else if (isVimeoUrl(STREAMING_URL)) {
                 File cookieFile = new File(getFilesDir(), "vimeo_cookies.txt");
