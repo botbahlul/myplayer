@@ -306,7 +306,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         buttonEmbed.setOnClickListener(view -> {
-            Toast.makeText(this, "Loading stream, plese wait a few seconds...", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Loading stream, plese wait for a few seconds...", Toast.LENGTH_LONG).show();
             STREAMING_URL = urlInput.getText().toString().toLowerCase().trim();
             STREAMING_URL = urlInput.getText().toString().trim().replace("https://m.", "https://www.");
             Log.d(TAG, "onCreate: STREAMING_URL = " + STREAMING_URL);
