@@ -68,11 +68,11 @@
             tools:ignore="TouchTargetSizeCheck,DuplicateSpeakableTextCheck"
             />
         <!-- Media3 PlayerView on Center -->
-        <androidx.media3.ui.PlayerView
+        <com.app.myplayer.AspectRatioPlayerView
             android:id="@+id/player_view"
             android:layout_below="@id/button_embed"
             android:layout_width="fill_parent"
-            android:layout_height="250dp"
+            android:layout_height="wrap_content"
             android:background="#000000"
             app:show_buffering="when_playing"
             app:show_timeout="5000"
@@ -83,6 +83,7 @@
             app:show_shuffle_button="false"
             app:show_subtitle_button="true"
             app:show_vr_button="false"
+            app:resize_mode="fit"
             />
         <!-- Label Selected File -->
         <TextView
