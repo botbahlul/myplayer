@@ -89,10 +89,10 @@
             />
         <!-- Label Selected File -->
         <TextView
-            android:id="@+id/textview_filePath"
+            android:id="@+id/textview_mediaInfo"
             android:layout_below="@id/player_view"
             android:text=""
-            android:gravity="start|center"
+            android:gravity="center"
             android:textAlignment="gravity"
             android:textSize="12sp"
             android:layout_width="fill_parent"
@@ -103,7 +103,7 @@
         <!-- Open Local Files Button -->
         <Button
             android:id="@+id/button_open_local_files"
-            android:layout_below="@id/textview_filePath"
+            android:layout_below="@id/textview_mediaInfo"
             android:text="@string/open_local_files"
             android:gravity="center"
             android:textAlignment="gravity"

@@ -28,6 +28,7 @@ import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.util.Log;
 import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
@@ -58,6 +59,7 @@ import androidx.media3.ui.TimeBar;
 import androidx.media3.common.C;
 import androidx.media3.common.Tracks;
 import androidx.media3.ui.TrackSelectionDialogBuilder;
+import androidx.media3.common.MediaMetadata;
 
 import com.chaquo.python.Python;
 import com.chaquo.python.android.AndroidPlatform;
@@ -104,7 +106,7 @@ public class MainActivity extends AppCompatActivity {
     private EditText urlInput;
     private Button buttonEmbed;
     private Button buttonOpenLocalFiles;
-    private TextView textViewSelectedFilePath;
+    private TextView textViewMediaInfo;
     private Button buttonGrantStoragePermission;
     private Button buttonGrantManageAppAllFilesAccessPermission;
     private Button buttonGrantPersistedttreeUriPermission;
@@ -157,7 +159,7 @@ public class MainActivity extends AppCompatActivity {
         }
         buttonEmbed = findViewById(R.id.button_embed);
         buttonOpenLocalFiles = findViewById(R.id.button_open_local_files);
-        textViewSelectedFilePath = findViewById(R.id.textview_filePath);
+        textViewMediaInfo = findViewById(R.id.textview_mediaInfo);
         buttonGrantStoragePermission = findViewById(R.id.button_grant_storage_permission);
         buttonGrantManageAppAllFilesAccessPermission = findViewById(R.id.button_grant_manage_app_all_files_access_permission);
         buttonGrantPersistedttreeUriPermission = findViewById(R.id.button_grant_persisted_tree_uri_permission);
@@ -300,8 +302,8 @@ public class MainActivity extends AppCompatActivity {
             Log.d(TAG, "rootLayout focus = " + hasFocus);
         });
 
-        textViewSelectedFilePath.setOnFocusChangeListener((v, hasFocus) -> {
-            Log.d(TAG, "textViewSelectedFilePath focus = " + hasFocus);
+        textViewMediaInfo.setOnFocusChangeListener((v, hasFocus) -> {
+            Log.d(TAG, "textViewMediaInfo focus = " + hasFocus);
         });
 
         buttonEmbed.setOnClickListener(view -> {
@@ -618,6 +620,36 @@ public class MainActivity extends AppCompatActivity {
 
                 playerView.setPlayer(mediaController);
 
+                mediaController.addListener(new androidx.media3.common.Player.Listener() {
+                    @Override
+                    public void onMediaMetadataChanged(MediaMetadata metadata) {
+                        CharSequence title = metadata.title;
+
+                        if (title != null && title.length() > 0) {
+                            //ActionBar actionBar = getSupportActionBar();
+                            //if (actionBar != null) {
+                            //    actionBar.setTitle(title);
+                            //}
+                            textViewMediaInfo.setText(title);
+                            textViewMediaInfo.setTextColor(Color.WHITE);
+                            textViewMediaInfo.setGravity(Gravity.CENTER);
+                            Log.i(TAG, "Stream title: " + title);
+                        }
+                    }
+                });
+
+                // Display the metadata that is already available
+                MediaMetadata metadata = mediaController.getMediaMetadata();
+                CharSequence currentTitle = metadata.title;
+
+                if (currentTitle != null && currentTitle.length() > 0) {
+                    ActionBar actionBar = getSupportActionBar();
+
+                    if (actionBar != null) {
+                        actionBar.setTitle(currentTitle);
+                    }
+                }
+
                 playerView.setFullscreenButtonClickListener(isFullscreen -> {
                     if (isFullscreen) {
                         enterFullscreen();
@@ -764,18 +796,17 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 runOnUiThread(() -> {
-                    textViewSelectedFilePath.setText("");
+                    textViewMediaInfo.setText("");
 
                     for (int i = 0; i < selectedFilesPath.size(); i++) {
                         String t2 = selectedFilesPath.get(i);
-                        textViewSelectedFilePath.append(t2 + "\n");
+                        textViewMediaInfo.append(t2 + "\n");
+                        textViewMediaInfo.setTextColor(Color.WHITE);
+                        textViewMediaInfo.setGravity(Gravity.CENTER);
                     }
                 });
 
-                Log.i(
-                        TAG,
-                        "Total selected files = " + selectedFilesUri.size()
-                );
+                Log.i(TAG, "Total selected files = " + selectedFilesUri.size());
 
                 Intent playbackIntent = new Intent(
                         MainActivity.this,

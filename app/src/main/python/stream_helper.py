@@ -309,18 +309,6 @@ def get_yt_stream_and_choices(url):
     if not info:
         raise RuntimeError("yt-dlp: no video information found")
 
-    '''
-    stream_url = info.get("url")
-    if not stream_url:
-        raise RuntimeError("yt-dlp: no playable yt URL found")
-
-    return json.dumps({
-        "url": stream_url,
-        "headers": info.get("http_headers") or {},
-        "choices": _build_choices(info),
-    })
-    '''
-
     stream_url, headers = _pick_stream(info)
     if not stream_url:
         raise RuntimeError("yt-dlp: no playable yt URL found")
@@ -328,9 +316,9 @@ def get_yt_stream_and_choices(url):
     return json.dumps({
         "url": stream_url,
         "headers": headers,
+        "title": info.get("title") or info.get("fulltitle") or "",
         "choices": _build_choices(info),
     })
-
 
 def get_yt_url(url):
     try:
@@ -843,13 +831,10 @@ def get_yt_stream_data(url):
     if not stream_url:
         raise RuntimeError("yt-dlp: no playable stream URL found")
 
-    #return json.dumps({
-    #    "url": stream_url,
-    #    "headers": headers
-    #})
     return json.dumps({
         "url": stream_url,
         "headers": headers,
+        "title": info.get("title") or info.get("fulltitle") or "",
         "choices": _build_choices(info)
     })
 
@@ -907,6 +892,7 @@ def resolve_stream_data(url):
             return json.dumps({
                 "url": stream_url,
                 "headers": {},
+                "title": "",
                 "resolver": "streamlink",
                 "choices": _streamlink_choices(url)
             })

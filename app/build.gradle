@@ -16,14 +16,14 @@ android {
 		}
 	}
 
-// Untuk AGP versi baru (7.0+)
+	// For newer versions of AGP (7.0+)
 	androidResources {
 		noCompress 'tar', 'gz', 'tgz', 'tar.gz'
 	}
 
-	// Atau jika menggunakan AGP versi lama
-	//aaptOptions {
-	//	noCompress 'tar', 'gz', 'tgz', 'tar.gz'
+	// Or if using an older version of AGP
+	// aaptOptions {
+	// noCompress 'tar', 'gz', 'tgz', 'tar.gz'
 	//}
 
     defaultConfig {
@@ -32,7 +32,7 @@ android {
         targetSdk 33
 
         versionCode 1
-        versionName "1.0.4"
+        versionName "1.0.5"
 
         //testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 

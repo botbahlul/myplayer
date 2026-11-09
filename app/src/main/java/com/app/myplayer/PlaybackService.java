@@ -31,6 +31,7 @@ import androidx.media3.common.C;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.TrackSelectionParameters;
 import androidx.media3.common.Tracks;
+import androidx.media3.common.MediaMetadata;
 import org.json.JSONArray;
 
 import com.chaquo.python.PyObject;
@@ -303,6 +304,7 @@ public class PlaybackService extends MediaSessionService {
 
                 JSONObject streamData = new JSONObject(resultText);
                 resolvedStreamUrl = streamData.getString("url");
+                final String streamTitle = streamData.optString("title", "").trim();
 
                 Map<String, String> parsedHeaders = jsonToMap(streamData.optJSONObject("headers"));
                 if (!isYouTube) {
@@ -352,9 +354,9 @@ public class PlaybackService extends MediaSessionService {
                     }
 
                     if (isYouTube) {
-                        playYTStream(finalStreamUrl);
+                        playYTStream(finalStreamUrl, streamTitle);
                     } else {
-                        playStream(finalStreamUrl, streamHeaders);
+                        playStream(finalStreamUrl, streamHeaders, streamTitle);
                     }
                 });
 
@@ -459,7 +461,7 @@ public class PlaybackService extends MediaSessionService {
     }
 
     @OptIn(markerClass = UnstableApi.class)
-    private void playYTStream(String streamUrl) {
+    private void playYTStream(String streamUrl, String title) {
         if (player == null) {
             Log.e(TAG, "Cannot play stream: player is null");
             return;
@@ -473,7 +475,16 @@ public class PlaybackService extends MediaSessionService {
                         );
 
         DefaultMediaSourceFactory mediaSourceFactory = new DefaultMediaSourceFactory(httpDataSourceFactory);
-        player.setMediaSource(mediaSourceFactory.createMediaSource(MediaItem.fromUri(Uri.parse(streamUrl))));
+        //player.setMediaSource(mediaSourceFactory.createMediaSource(MediaItem.fromUri(Uri.parse(streamUrl))));
+        MediaItem mediaItem = new MediaItem.Builder()
+                .setUri(Uri.parse(streamUrl))
+                .setMediaMetadata(
+                        new MediaMetadata.Builder()
+                                .setTitle(title)
+                                .build()
+                )
+                .build();
+        player.setMediaSource(mediaSourceFactory.createMediaSource(mediaItem));
         player.prepare();
         player.play();
         Log.i(TAG, "Playback started");
@@ -500,7 +511,7 @@ public class PlaybackService extends MediaSessionService {
     }
 
     @OptIn(markerClass = UnstableApi.class)
-    private void playStream(String streamUrl, Map<String, String> headers) {
+    private void playStream(String streamUrl, Map<String, String> headers, String title) {
         try {
             if (player == null) {
                 Log.e(TAG, "Cannot play stream: player is null");
@@ -544,7 +555,7 @@ public class PlaybackService extends MediaSessionService {
                             .setAllowCrossProtocolRedirects(true);
 
             MediaItem.Builder mediaItemBuilder = new MediaItem.Builder().setUri(Uri.parse(streamUrl));
-
+            mediaItemBuilder.setMediaMetadata(new MediaMetadata.Builder().setTitle(title).build());
             String lowerUrl = streamUrl.toLowerCase(Locale.ROOT);
 
             if (lowerUrl.contains(".m3u8")  || lowerUrl.contains("vidio.com")) {
