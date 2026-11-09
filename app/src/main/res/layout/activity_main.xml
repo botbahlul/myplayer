@@ -32,6 +32,7 @@
             android:text="@string/label"
             android:textAlignment="gravity"
             android:textSize="12sp"
+            android:textColor="?android:attr/textColorPrimary"
             />
         <!-- Embed Button -->
         <Button
@@ -40,7 +41,6 @@
             android:layout_height="wrap_content"
             android:layout_alignParentEnd="true"
             android:layout_marginStart="1dp"
-            android:layout_marginEnd="1dp"
             android:text="@string/embed_btn"
             android:gravity="center"
             android:textAlignment="gravity"
@@ -59,6 +59,7 @@
             android:focusable="true"
             android:focusableInTouchMode="true"
             android:textSize="12sp"
+            android:textColor="?android:attr/textColorPrimary"
             android:autofillHints="https://www.youtube.com/watch?v=oUYnZv_G82Q"
             android:gravity="center"
             android:hint="@string/url_streaming"
@@ -68,12 +69,12 @@
             tools:ignore="TouchTargetSizeCheck,DuplicateSpeakableTextCheck"
             />
         <!-- Media3 PlayerView on Center -->
-        <!--com.app.myplayer.AspectRatioPlayerView -->
         <androidx.media3.ui.PlayerView
             android:id="@+id/player_view"
             android:layout_below="@id/button_embed"
             android:layout_width="fill_parent"
             android:layout_height="wrap_content"
+            android:layout_gravity="center"
             android:background="#000000"
             app:show_buffering="when_playing"
             app:show_timeout="5000"
@@ -95,10 +96,13 @@
             android:gravity="center"
             android:textAlignment="gravity"
             android:textSize="12sp"
+            android:textColor="?android:attr/textColorPrimary"
             android:layout_width="fill_parent"
-            android:layout_height="32dp"
-            android:layout_marginStart="5dp"
-            android:layout_marginEnd="5dp"
+            android:layout_height="wrap_content"
+            android:minHeight="32dp"
+            android:layout_marginStart="1dp"
+            android:layout_marginEnd="1dp"
+            android:layout_gravity="center"
             />
         <!-- Open Local Files Button -->
         <Button

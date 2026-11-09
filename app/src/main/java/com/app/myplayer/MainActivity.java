@@ -27,7 +27,6 @@ import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.util.Log;
-import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -42,7 +41,6 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -137,6 +135,8 @@ public class MainActivity extends AppCompatActivity {
 
     private DisplayMetrics display;
 
+    private int normalSystemUiVisibility;
+
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -170,8 +170,7 @@ public class MainActivity extends AppCompatActivity {
         rootLayout.setFocusable(true);
         rootLayout.setFocusableInTouchMode(true);
         root.requestFocus();
-        adjustActionBar();
-        playerView.setMinimumHeight((int) (0.9 * Math.round(DISPLAY_METRIC.DISPLAY_WIDTH * 3f / 4f)));
+        playerView.setMinimumHeight((int) (0.9 * Math.round(DISPLAY_METRIC.DISPLAY_WIDTH * 9f / 16f)));
 
         if (!Python.isStarted()) {
             Python.start(new AndroidPlatform(getApplicationContext()));
@@ -626,35 +625,19 @@ public class MainActivity extends AppCompatActivity {
                         CharSequence title = metadata.title;
 
                         if (title != null && title.length() > 0) {
-                            //ActionBar actionBar = getSupportActionBar();
-                            //if (actionBar != null) {
-                            //    actionBar.setTitle(title);
-                            //}
                             textViewMediaInfo.setText(title);
-                            textViewMediaInfo.setTextColor(Color.WHITE);
                             textViewMediaInfo.setGravity(Gravity.CENTER);
                             Log.i(TAG, "Stream title: " + title);
                         }
                     }
                 });
 
-                // Display the metadata that is already available
-                MediaMetadata metadata = mediaController.getMediaMetadata();
-                CharSequence currentTitle = metadata.title;
-
-                if (currentTitle != null && currentTitle.length() > 0) {
-                    ActionBar actionBar = getSupportActionBar();
-
-                    if (actionBar != null) {
-                        actionBar.setTitle(currentTitle);
-                    }
-                }
-
                 playerView.setFullscreenButtonClickListener(isFullscreen -> {
                     if (isFullscreen) {
                         enterFullscreen();
                     } else {
                         exitFullscreen();
+                        playerView.setMinimumHeight((int) (0.9 * Math.round(DISPLAY_METRIC.DISPLAY_WIDTH * 9f / 16f)));
                     }
                     playerView.setShowSubtitleButton(true);
                 });
@@ -693,8 +676,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onConfigurationChanged(@NonNull Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        adjustActionBar();
-        playerView.setMinimumHeight((int) (0.9 * Math.round(DISPLAY_METRIC.DISPLAY_WIDTH * 3f / 4f)));
+        playerView.setMinimumHeight((int) (0.9 * Math.round(DISPLAY_METRIC.DISPLAY_WIDTH * 9f / 16f)));
     }
 
     ActivityResultLauncher<Intent> startForBrowseFileActivity = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), new ActivityResultCallback<ActivityResult>() {
@@ -783,6 +765,7 @@ public class MainActivity extends AppCompatActivity {
                                 "selectedFilesUri[" + i + "] = " + fileUri
                         );
                     }
+
                 } else {
                     runOnUiThread(() -> {
                         Toast.makeText(
@@ -801,7 +784,6 @@ public class MainActivity extends AppCompatActivity {
                     for (int i = 0; i < selectedFilesPath.size(); i++) {
                         String t2 = selectedFilesPath.get(i);
                         textViewMediaInfo.append(t2 + "\n");
-                        textViewMediaInfo.setTextColor(Color.WHITE);
                         textViewMediaInfo.setGravity(Gravity.CENTER);
                     }
                 });
@@ -1549,6 +1531,7 @@ public class MainActivity extends AppCompatActivity {
         fullscreenContainer.addView(playerView, fullscreenParams);
 
         ViewGroup decorView = (ViewGroup) getWindow().getDecorView();
+        normalSystemUiVisibility = decorView.getSystemUiVisibility();
         decorView.addView(
                 fullscreenContainer,
                 new ViewGroup.LayoutParams(
@@ -1584,11 +1567,7 @@ public class MainActivity extends AppCompatActivity {
         );
 
         fullscreenContainer = null;
-
-        getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        );
-
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         //playerView.setFullscreenButtonState(false);
     }
 
@@ -2029,37 +2008,6 @@ public class MainActivity extends AppCompatActivity {
                     d.dismiss();
                 })
                 .show();
-    }
-
-    private void adjustActionBar() {
-        ActionBar actionBar = getSupportActionBar();
-
-        if (actionBar == null) return;
-
-        boolean landscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
-        int height = landscape ? 28 : 40;
-        float textSize = landscape ? 12 : 14;
-
-        TypedValue tv = new TypedValue();
-        getTheme().resolveAttribute(androidx.appcompat.R.attr.actionBarSize, tv, true);
-        int heightPx = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, height, getResources().getDisplayMetrics());
-        View decorView = getWindow().getDecorView();
-        int actionBarId = androidx.appcompat.R.id.action_bar;
-
-        View actionBarView = decorView.findViewById(actionBarId);
-
-        if (actionBarView != null) {
-            ViewGroup.LayoutParams params = actionBarView.getLayoutParams();
-            params.height = heightPx;
-            actionBarView.setLayoutParams(params);
-        }
-
-        int titleId = androidx.appcompat.R.id.action_bar_title;
-        TextView title = decorView.findViewById(titleId);
-
-        if (title != null) {
-            title.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSize);
-        }
     }
 
 }
