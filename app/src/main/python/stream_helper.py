@@ -22,6 +22,7 @@ print(f"[Cookies] Size: {os.path.getsize(VIMEO_COOKIE_FILE) if os.path.isfile(VI
 
 COOKIE_AUTH_REQUIRED = "COOKIE_AUTH_REQUIRED:"
 
+
 def _is_cookie_auth_error(error):
     message = str(error).lower()
 
@@ -129,6 +130,7 @@ print("yt-dlp version: " + yt_dlp.version.__version__)
 print("yt-dlp-ejs available: " + str(importlib.util.find_spec("yt_dlp_ejs") is not None))
 print("QuickJS path from PATH: " + str(shutil.which("qjs")))
 print("QuickJS path from PATH: " + str(shutil.which("libqjs.so")))
+
 
 def _extract_info(url):
     if not QUICKJS_PATH:
@@ -278,6 +280,7 @@ def _build_choices(info):
     choices.sort(key=lambda c: (c["height"], c["fps"], c["tbr"]), reverse=True)
     return choices
 
+
 def _pick_stream(info):
     url = info.get("url")
     if url:
@@ -293,6 +296,7 @@ def _pick_stream(info):
             return f["manifest_url"], f.get("http_headers") or info.get("http_headers") or {}
 
     return None, {}
+
 
 def get_yt_stream_and_choices(url):
     try:
@@ -326,6 +330,7 @@ def get_yt_stream_and_choices(url):
         "headers": headers,
         "choices": _build_choices(info),
     })
+
 
 def get_yt_url(url):
     try:

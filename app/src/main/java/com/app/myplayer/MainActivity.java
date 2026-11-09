@@ -98,7 +98,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "MyPlayer";
 
-    private String STREAMING_URL = "";
+    private String STREAM_URL = "";
 
     private PlayerView playerView;
     private EditText urlInput;
@@ -129,8 +129,8 @@ public class MainActivity extends AppCompatActivity {
     private View rootLayout;
 
     private ActivityResultLauncher<String[]> cookieFilePicker;
-    private String pendingYouTubeUrl;
-    private boolean pendingYouTubeCookieRequired = false;
+    private String pendingStreamUrl;
+    private boolean pendingStreamCookieRequired = false;
     private String pendingCookieFileName = "youtube_cookies.txt";
 
     private DisplayMetrics display;
@@ -178,12 +178,12 @@ public class MainActivity extends AppCompatActivity {
         logVideoDecoders();
 
         cookieFilePicker = registerForActivityResult(new ActivityResultContracts.OpenDocument(), uri -> {
-                    String url = pendingYouTubeUrl;
-                    boolean cookieRequired = pendingYouTubeCookieRequired;
+                    String url = pendingStreamUrl;
+                    boolean cookieRequired = pendingStreamCookieRequired;
                     String cookieFileName = pendingCookieFileName;
 
-                    pendingYouTubeUrl = null;
-                    pendingYouTubeCookieRequired = false;
+                    pendingStreamUrl = null;
+                    pendingStreamCookieRequired = false;
                     pendingCookieFileName = "youtube_cookies.txt";
 
                     if (url == null || url.trim().isEmpty()) {
@@ -216,13 +216,10 @@ public class MainActivity extends AppCompatActivity {
 
                     try {
                         copyCookieFile(uri, cookieFileName);
-
                         File cookieFile = new File(getFilesDir(), cookieFileName);
-
                         if (!cookieFile.isFile() || cookieFile.length() == 0) {
                             throw new IOException("The selected cookie file is empty");
                         }
-
                         String provider;
                         if ("youtube_cookies.txt".equals(cookieFileName)) {
                             provider = "YouTube";
@@ -240,20 +237,6 @@ public class MainActivity extends AppCompatActivity {
                                 Toast.LENGTH_SHORT
                         ).show();
 
-                        /*
-                        if (av1Retry) {
-                            Intent retryIntent = new Intent(MainActivity.this, PlaybackService.class);
-                            retryIntent.setAction("com.app.myplayer.TEST_VIMEO_AV1");
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                startForegroundService(retryIntent);
-                            } else {
-                                startService(retryIntent);
-                            }
-                        } else {
-                            startPlaybackService(url);
-                        }
-                        */
-
                     } catch (IOException e) {
                         Log.e(TAG, "Failed to import " + cookieFileName, e);
 
@@ -264,8 +247,8 @@ public class MainActivity extends AppCompatActivity {
                         ).show();
 
                         if (cookieRequired) {
-                            pendingYouTubeUrl = url;
-                            pendingYouTubeCookieRequired = true;
+                            pendingStreamUrl = url;
+                            pendingStreamCookieRequired = true;
                             pendingCookieFileName = cookieFileName;
 
                             new AlertDialog.Builder(MainActivity.this)
@@ -323,11 +306,11 @@ public class MainActivity extends AppCompatActivity {
 
         buttonEmbed.setOnClickListener(view -> {
             Toast.makeText(this, "Loading stream, plese wait for a few seconds...", Toast.LENGTH_LONG).show();
-            STREAMING_URL = urlInput.getText().toString().toLowerCase().trim();
-            STREAMING_URL = urlInput.getText().toString().trim().replace("https://m.", "https://www.");
-            Log.d(TAG, "onCreate: STREAMING_URL = " + STREAMING_URL);
+            STREAM_URL = urlInput.getText().toString().toLowerCase().trim();
+            STREAM_URL = urlInput.getText().toString().trim().replace("https://m.", "https://www.");
+            Log.d(TAG, "onCreate: STREAM_URL = " + STREAM_URL);
 
-            if (STREAMING_URL.isEmpty()) {
+            if (STREAM_URL.isEmpty()) {
                 Toast.makeText(
                         MainActivity.this,
                         "URL can't be empty",
@@ -340,37 +323,37 @@ public class MainActivity extends AppCompatActivity {
             buttonEmbed.requestFocus();
 
             Log.i(TAG, "Starting PlaybackService");
-            Log.i(TAG, "Streaming URL: " + STREAMING_URL);
+            Log.i(TAG, "Streaming URL: " + STREAM_URL);
 
-            if (isVidioUrl(STREAMING_URL)) {
-                startPlaybackService(STREAMING_URL);
+            if (isVidioUrl(STREAM_URL)) {
+                startPlaybackService(STREAM_URL);
             }
-            else if (isVimeoUrl(STREAMING_URL)) {
+            else if (isVimeoUrl(STREAM_URL)) {
                 File cookieFile = new File(getFilesDir(), "vimeo_cookies.txt");
 
                 if (cookieFile.isFile() && cookieFile.length() > 0) {
-                    startPlaybackService(STREAMING_URL);
+                    startPlaybackService(STREAM_URL);
                 } else {
-                    pendingYouTubeUrl = STREAMING_URL;
-                    pendingYouTubeCookieRequired = false;
+                    pendingStreamUrl = STREAM_URL;
+                    pendingStreamCookieRequired = false;
                     pendingCookieFileName = "vimeo_cookies.txt";
                     browseVimeoCookies();
                 }
 
-            } else if (isYouTubeUrl(STREAMING_URL)) {
+            } else if (isYouTubeUrl(STREAM_URL)) {
                 File cookieFile = new File(getFilesDir(), "youtube_cookies.txt");
 
                 if (cookieFile.isFile() && cookieFile.length() > 0) {
-                    startPlaybackService(STREAMING_URL);
+                    startPlaybackService(STREAM_URL);
                 } else {
-                    pendingYouTubeUrl = STREAMING_URL;
-                    pendingYouTubeCookieRequired = false;
+                    pendingStreamUrl = STREAM_URL;
+                    pendingStreamCookieRequired = false;
                     pendingCookieFileName = "youtube_cookies.txt";
                     browseYouTubeCookies();
                 }
 
             } else {
-                startPlaybackService(STREAMING_URL);
+                startPlaybackService(STREAM_URL);
             }
         });
 
@@ -1610,13 +1593,13 @@ public class MainActivity extends AppCompatActivity {
                 String failedUrl = intent.getStringExtra("request_url");
 
                 if (failedUrl == null || failedUrl.trim().isEmpty()) {
-                    failedUrl = STREAMING_URL;
+                    failedUrl = STREAM_URL;
                 }
 
                 final String url = failedUrl;
 
-                pendingYouTubeUrl = url;
-                pendingYouTubeCookieRequired = true;
+                pendingStreamUrl = url;
+                pendingStreamCookieRequired = true;
                 pendingCookieFileName = cookieFileNameForUrl(url);
 
                 new AlertDialog.Builder(MainActivity.this)
@@ -1826,7 +1809,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void startPlaybackService(String url) {
         Intent intent = new Intent(MainActivity.this, PlaybackService.class);
-        intent.putExtra("EXTRA_STREAMING_URL", url);
+        intent.putExtra("EXTRA_STREAM_URL", url);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent);

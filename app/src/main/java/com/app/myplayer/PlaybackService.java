@@ -199,8 +199,8 @@ public class PlaybackService extends MediaSessionService {
             return super.onStartCommand(intent, flags, startId);
         }
 
-        if (intent != null && intent.hasExtra("EXTRA_STREAMING_URL")) {
-            streamUrl = intent.getStringExtra("EXTRA_STREAMING_URL");
+        if (intent != null && intent.hasExtra("EXTRA_STREAM_URL")) {
+            streamUrl = intent.getStringExtra("EXTRA_STREAM_URL");
             Log.i(TAG, "Receiving URL from Intent: " + streamUrl);
             getStreamUrlAndPlay();
         }
