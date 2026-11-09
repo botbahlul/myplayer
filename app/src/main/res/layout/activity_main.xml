@@ -68,7 +68,8 @@
             tools:ignore="TouchTargetSizeCheck,DuplicateSpeakableTextCheck"
             />
         <!-- Media3 PlayerView on Center -->
-        <com.app.myplayer.AspectRatioPlayerView
+        <!--com.app.myplayer.AspectRatioPlayerView -->
+        <androidx.media3.ui.PlayerView
             android:id="@+id/player_view"
             android:layout_below="@id/button_embed"
             android:layout_width="fill_parent"
@@ -84,6 +85,7 @@
             app:show_subtitle_button="true"
             app:show_vr_button="false"
             app:resize_mode="fit"
+            android:gravity="center"
             />
         <!-- Label Selected File -->
         <TextView

@@ -27,6 +27,7 @@ import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.provider.Settings;
 import android.util.Log;
+import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
@@ -40,6 +41,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
@@ -88,6 +90,9 @@ import android.text.style.ClickableSpan;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import android.util.DisplayMetrics;
+import android.content.res.Configuration;
+
 @UnstableApi
 public class MainActivity extends AppCompatActivity {
 
@@ -128,10 +133,19 @@ public class MainActivity extends AppCompatActivity {
     private boolean pendingYouTubeCookieRequired = false;
     private String pendingCookieFileName = "youtube_cookies.txt";
 
+    private DisplayMetrics display;
+
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        display = new DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getMetrics(display);
+        float d = display.density;
+        DISPLAY_METRIC.DISPLAY_WIDTH = display.widthPixels;
+        DISPLAY_METRIC.DISPLAY_HEIGHT = display.heightPixels;
+        DISPLAY_METRIC.DISPLAY_DENSITY = d;
 
         setContentView(R.layout.activity_main);
         urlInput = findViewById(R.id.url_input);
@@ -154,6 +168,8 @@ public class MainActivity extends AppCompatActivity {
         rootLayout.setFocusable(true);
         rootLayout.setFocusableInTouchMode(true);
         root.requestFocus();
+        adjustActionBar();
+        playerView.setMinimumHeight((int) (0.9 * Math.round(DISPLAY_METRIC.DISPLAY_WIDTH * 3f / 4f)));
 
         if (!Python.isStarted()) {
             Python.start(new AndroidPlatform(getApplicationContext()));
@@ -657,6 +673,13 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         finish();
+    }
+
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        adjustActionBar();
+        playerView.setMinimumHeight((int) (0.9 * Math.round(DISPLAY_METRIC.DISPLAY_WIDTH * 3f / 4f)));
     }
 
     ActivityResultLauncher<Intent> startForBrowseFileActivity = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), new ActivityResultCallback<ActivityResult>() {
@@ -1992,6 +2015,37 @@ public class MainActivity extends AppCompatActivity {
                     d.dismiss();
                 })
                 .show();
+    }
+
+    private void adjustActionBar() {
+        ActionBar actionBar = getSupportActionBar();
+
+        if (actionBar == null) return;
+
+        boolean landscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
+        int height = landscape ? 28 : 40;
+        float textSize = landscape ? 12 : 14;
+
+        TypedValue tv = new TypedValue();
+        getTheme().resolveAttribute(androidx.appcompat.R.attr.actionBarSize, tv, true);
+        int heightPx = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, height, getResources().getDisplayMetrics());
+        View decorView = getWindow().getDecorView();
+        int actionBarId = androidx.appcompat.R.id.action_bar;
+
+        View actionBarView = decorView.findViewById(actionBarId);
+
+        if (actionBarView != null) {
+            ViewGroup.LayoutParams params = actionBarView.getLayoutParams();
+            params.height = heightPx;
+            actionBarView.setLayoutParams(params);
+        }
+
+        int titleId = androidx.appcompat.R.id.action_bar_title;
+        TextView title = decorView.findViewById(titleId);
+
+        if (title != null) {
+            title.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSize);
+        }
     }
 
 }
